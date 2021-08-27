@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+	<body>
+		<canvas id="canvas" width="630" height="630" style="border:4px solid #000000;">Your browser does not support the canvas element.</canvas>
+		<br><br><button id="clear">Clear</button>
+		<button id="solve">Solve</button>
+		<button id="fill">Fill</button>
+		<br><br><select id="level">
+			<option value="0.5">Easy</option>
+			<option value="0.25">Normal</option>
+			<option value="0">Hard</option>
+		</select>
+		<button id="generate">Generate</button>
+		<div><br>Usage: <br>Playing Sudoku:<br>Click "Generate" to generate a game.(Hard Games can occationally take a long time to generate)<br>Click on a square to select it. <br>Type a number to set/change number in selected square.<br>Click within the 9 regions of a selected square to toggle possiblities.<br>
+		Click fill to auto-fill possibilities (Sort of cheating)<br>
+		<br>Solving Sudoku:<br>Click clear to empty board.<br>Click on squares to select, then type number to set square.<br>Click solve.(Unsolvable games can take a long time and games with multiple solutions will produce only one solution)
+		<script>
+			//init html elements
+			var canvas = document.getElementById('canvas');
+			var context = canvas.getContext("2d");
+			var clear = document.getElementById('clear');
+			var solve = document.getElementById('solve');
+			var fill = document.getElementById('fill');//todo
+			var level = document.getElementById('level');
+			var generate = document.getElementById('generate');
+			//init sudoku info
+			var boxW = canvas.width / 9;
+			var selected = {row:10, col:10};
+			var candidates;
+			var grid,gridf,gridb;
+			clearGrid();
+			
+			function clearGrid(){
+				selected.row = 10;
+				selected.col = 10;
+				grid = [];
+				gridf = [];
+				gridb = [];
+				candidates = [];
+				var i,j,k;
+				for(i = 0; i < 9; i++){
+					grid.push([]);
+					gridf.push([]);
+					gridb.push([]);
+					for(j = 0; j < 9; j++){
+						grid[i].push('');
+						gridf[i].push('');
+						gridb[i].push('');
+					}
+				}
+				for(i = 0; i < 9; i++){
+					candidates.push([]);
+					for(j = 0; j < 9; j++){
+						candidates[i].push([]);
+						for(k = 0; k < 9; k++){
+							candidates[i][j].push(false);
+						}
+					}
+				}
+				drawGrid(grid);
+			}
+			
+			document.onclick = function(e){
+				var selectedRow = Math.floor((e.pageY - 12) / boxW);
+				var selectedCol = Math.floor((e.pageX - 12) / boxW);
+				if(selected.row < 9 && selected.col < 9 && selectedCol == selected.col && selectedRow == selected.row && grid[selectedRow][selectedCol] == ''){
+					var innerX = Math.floor(((e.pageX - 12) - Math.floor((e.pageX - 12) / boxW)*boxW)*3/boxW);
+					var innerY = Math.floor(((e.pageY - 12) - Math.floor((e.pageY - 12) / boxW)*boxW)*3/boxW);
+					candidates[selectedRow][selectedCol][innerY*3+innerX] = !candidates[selectedRow][selectedCol][innerY*3+innerX]; 
+				}
+				selected.row = selectedRow;
+				selected.col = selectedCol;
+				drawGrid(grid);
+			}
+			document.onkeydown = function(e){
+				if(selected.row < 9 && selected.col < 9){
+					if(1 <= e.key && e.key <= 9){
+						grid[selected.row][selected.col] = String.fromCharCode(e.keyCode);
+					}
+					else if(e.key == 'Backspace'){
+						grid[selected.row][selected.col] = '';
+					}
+					drawGrid(grid);
+				}
+			}
+			clear.onclick = function(){
+				clearGrid();
+			}
+			solve.onclick = function(){
+				if(solveSudoku(grid) && isGridValid(grid)){
+					drawGrid(grid);
+				}else{
+					alert('no solution');
+				}
+			}
+			fill.onclick = function(){
+				var i,j,k;
+				for(i = 0; i < 9; i++){
+					for(j = 0; j < 9; j++){
+						for(k = 0; k < 9; k++){
+							candidates[i][j][k] = isValid(grid,i,j,k+1);
+						}
+					}
+				}
+				drawGrid(grid);
+			}
+			generate.onclick = function(){
+				clearGrid();
+				var i,j,k,a,temp,same,x,y;
+				var removed = 0;
+				var left = 0;
+				var indices = [];
+				for(i = 0; i < 9; i++){
+					for(j = 0; j < 9; j++){
+						indices[i*9+j] = {x:i,y:j};
+					}
+				}
+				var currentIndex = indices.length, temporaryValue, randomIndex;
+				while (0 !== currentIndex) {
+					randomIndex = Math.floor(Math.random() * currentIndex);
+					currentIndex -= 1;
+					
+					temporaryValue = indices[currentIndex];
+					indices[currentIndex] = indices[randomIndex];
+					indices[randomIndex] = temporaryValue;
+				}
+				for(i = 0; i < 3; i++){
+					a = [1,2,3,4,5,6,7,8,9];
+					for(k = i*3; k < i*3+3; k++){
+						for(j = i*3; j < i*3+3; j++){
+							grid[k][j] = a.splice(Math.floor(Math.random()*a.length),1)[0];
+						}
+					}
+				}
+				solveSudoku(grid);
+				for(i = 0; i < indices.length; i++){
+					console.log(i);
+					temp = grid[indices[i].x][indices[i].y];
+					grid[indices[i].x][indices[i].y] = '';
+					for(k = 0; k < 9; k++){
+						for(a = 0; a < 9; a++){
+							gridf[k][a] = grid[k][a];
+							gridb[k][a] = grid[k][a];
+						}
+					}
+					if(solveSudoku(gridf) && solveSudokuBackwards(gridb)){
+						same = true;
+						for(x = 0; x < 9; x++){
+							for(y = 0; y < 9; y++){
+								if(gridf[x][y] != gridb[x][y]){
+									same = false;
+								}
+							}
+						}
+						if(!same){
+							grid[indices[i].x][indices[i].y] = temp;
+						}else if(Math.random() < level.value){
+							grid[indices[i].x][indices[i].y] = temp;
+							left++;
+						}else{
+							removed++;
+						}
+						
+					}
+					else{
+						grid[indices[i].x][indices[i].y] = temp;
+					}
+				}
+				console.log(left+' '+removed);
+				drawGrid(grid);
+			}
+			function solveSudoku(g){
+				var r,c,i;
+				var find = findEmpty(g);
+				if(!find.found){
+					return true;
+				}
+				r = find.r;
+				c = find.c;
+				for(i = 1; i <= 9; i++){
+					if(isValid(g,r,c,i)){
+						g[r][c] = i;
+						if(solveSudoku(g)){
+							return true;
+						}
+						g[r][c] = '';
+					}
+				}
+				return false;
+			}
+			
+			function solveSudokuBackwards(g){
+				var r,c,i;
+				var find = findEmpty(g);
+				if(!find.found){
+					return true;
+				}
+				r = find.r;
+				c = find.c;
+				for(i = 9; i >= 1; i--){
+					if(isValid(g,r,c,i)){
+						g[r][c] = i;
+						if(solveSudokuBackwards(g)){
+							return true;
+						}
+						g[r][c] = '';
+					}
+				}
+				return false;
+			}
+			
+			function findEmpty(g){
+				var r,c;
+				for(r = 0; r < 9; r++){
+					for(c = 0; c < 9; c++){
+						if(g[r][c] == ''){
+							return {found:true,r:r,c:c};
+						}
+					}
+				}
+				return {found:false,};
+			}
+			
+			function isValid(g,r,c,i){
+				return !usedInRow(g,r,i) &&
+					   !usedInCol(g,c,i) &&
+					   !usedInBox(g,r - r % 3,c - c % 3,i);
+			}
+			
+			function usedInRow(g,r,i){
+				var c;
+				for(c = 0; c < 9; c++){
+					//console.log(g);console.log(r);console.log(i);
+					if(g[r][c] == i){
+						return true;
+					}
+				}
+				return false;
+			}
+			
+			function usedInCol(g,c,i){
+				var r;
+				for(r = 0; r < 9; r++){
+					if(g[r][c] == i){
+						return true;
+					}
+				}
+				return false;
+			}
+			
+			function usedInBox(g,ri,ci,i){
+				var r,c;
+				for(r = 0; r < 3; r++){
+					for(c = 0; c < 3; c++){
+						if(g[r + ri][c + ci] == i){
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+			
+			function isGridValid(g){
+				var i,j,k,l,m,n;
+				//duplicates in rows
+				for(i = 0; i < 9; i++){
+					for(j = 0; j < 9; j++){
+						for(k = 0; k < 9; k++){
+							if(j != k && g[i][j] == g[i][k]){
+								return false;
+							}
+						}
+					}
+				}
+				//duplicates in cols
+				for(i = 0; i < 9; i++){
+					for(j = 0; j < 9; j++){
+						for(k = 0; k < 9; k++){
+							if(j != k && g[j][i] == g[k][i]){
+								return false;
+							}
+						}
+					}
+				}
+				//duplicates in 3x3 box
+				for(i = 0; i < 3; i++){
+					for(j = 0; j < 3; j++){
+						for(k = 0; k < 3; k++){
+							for(l = 0; l < 3; l++){
+								for(m = 0; m < 3; m++){
+									for(n = 0; n < 3; n++){
+										if((k != m || l != n) && g[k+i*3][l+j*3] == g[m+i*3][n+j*3]){
+											return false;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				return true;
+			}
+			
+			function drawGrid(g){
+				context.clearRect(0,0,canvas.width,canvas.height);
+				var i,j,k;
+				//grid, selected square
+				context.lineWidth = 1;
+				for(i = 0; i < 9; i++){
+					for(j = 0; j < 9; j++){
+						if(selected.row == i && selected.col == j){
+							context.fillStyle = '#adf8ff';
+							context.fillRect(j*boxW,i*boxW,boxW,boxW);
+						}
+						context.strokeStyle = "#888888";
+						context.strokeRect(j*boxW,i*boxW,boxW,boxW);
+						
+					}
+				}
+				//3x3 boxes
+				context.strokeStyle = "#000000";
+				context.lineWidth = 4;
+				for(i = 0; i < 3; i++){
+					for(j = 0; j < 3; j++){
+						context.strokeRect(i*boxW*3,j*boxW*3,boxW*3,boxW*3);
+					}
+				}
+				//grid values/candidates
+				for(i = 0; i < 9; i++){
+					for(j = 0; j < 9; j++){
+						if(g[i][j] == ''){
+							context.fillStyle = "#888888";
+							context.font = "17px Georgia";
+							for(k = 0; k < 9; k++){
+								if(candidates[i][j][k]){
+									context.fillText(k+1,j*boxW + 10 + (k % 3)*20,i*boxW + 20 + Math.floor(k/3)*20);
+								}
+							}
+						}else{
+							context.fillStyle = "#000000";
+							context.font = "42px Georgia";
+							context.fillText(g[i][j],j*boxW + boxW/2 - 10,i*boxW + boxW/2 + 10);
+						}
+						
+						
+					}
+				}
+				
+				
+			}
+			
+		</script>
+	</body>
+</html>
